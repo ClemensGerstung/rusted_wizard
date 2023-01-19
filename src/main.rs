@@ -1,9 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::ops::{AddAssign, Deref};
-use std::ops::DerefMut;
 use std::rc::Rc;
 
 #[derive(Eq, Hash)]
@@ -74,12 +72,12 @@ impl Tips {
         Tips { tips: HashMap::new() }
     }
 
-    fn add_tip(&mut self, player:&RefCell<Player>, tip:i8) {
-        self.tips.insert(player.borrow().name.to_string(), tip);
+    fn add_tip(&mut self, player:&Player, tip:i8) {
+        self.tips.insert(player.name.to_string(), tip);
     }
 
-    fn get_tip(&self, player:&RefCell<Player>) -> i8 {
-        match self.tips.get(&player.borrow().name.to_string()) {
+    fn get_tip(&self, player:&Player) -> i8 {
+        match self.tips.get(&player.name) {
             Some(tip) => *tip,
             None => 0
         }
@@ -94,8 +92,8 @@ impl Round {
     fn play(&mut self, input_callback: fn(&RefCell<Player>) -> i8) {
         let current_player_index = self.current_player_index as usize;
         if self.state == RoundState::TIPPING || self.state == RoundState::RETIPPING {
-            let current_player = &self.players[current_player_index];
-            self.tips.add_tip(current_player, input_callback(current_player));
+            let current_player:&RefCell<Player> = &self.players[current_player_index];
+            self.tips.add_tip(&current_player.borrow(), input_callback(current_player));
 
             if self.current_player_index == (self.players.len() - 1) as i8 {
                 let sum_of_tips:i8 = self.tips.tips.values().sum(); // TODO: is there an easier way?
@@ -110,8 +108,8 @@ impl Round {
                 self.current_player_index += 1;
             }
         } else if self.state == RoundState::PLAYING {
-            let current_player = &self.players[current_player_index];
-            self.matches.add_tip(current_player.borrow(), input_callback(current_player));
+            let current_player:&RefCell<Player> = &self.players[current_player_index];
+            self.matches.add_tip(&current_player.borrow(), input_callback(current_player));
 
             if self.current_player_index == (self.players.len() - 1) as i8 {
                 let sum_of_matches:i8 = self.matches.tips.values().sum(); // TODO: is there an easier way?
@@ -125,10 +123,11 @@ impl Round {
             }
         } else if self.state == RoundState::CHECKING {
             for player in &mut self.players {
-                let tip = self.tips.get_tip(player);
-                let matched = self.matches.get_tip(player);
-                let diff = (tip - matched).abs();
                 let p: &RefCell<Player> = player.borrow_mut();
+
+                let tip = self.tips.get_tip(&p.borrow());
+                let matched = self.matches.get_tip(&p.borrow());
+                let diff = (tip - matched).abs();
 
                 if diff == 0 {
                     p.borrow_mut().points += (20 + tip * 10) as i16;
@@ -146,8 +145,8 @@ impl Round {
 impl Display for Round {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for player in &self.players {
-            let mut p:&RefCell<Player> = player;
-            write!(f, "{}\n", p.borrow());
+            let p:&RefCell<Player> = player;
+            write!(f, "{}\n", p.borrow()).expect("AHHHHHAHAHAHAHAHA");
         }
 
         write!(f, "{:?}", self.state)
@@ -159,29 +158,21 @@ fn main() {
     let player2 = Rc::new(RefCell::new(Player::new("Player 2".to_string())));
     let players = vec![player1, player2];
 
-    let mut round = Round::new(1, players);
+    let mut round = Round::new(1, players.to_vec());
     println!("{}", round);
-    round.play(|p| {
-        println!("CB: {}", p.borrow());
-        return 1;
-    });
+    round.play(|_| { 1 }); // player 1 tips
 
     println!("{}", round);
-    round.play(|p| {
-        println!("CB: {}", p.borrow());
-        return 1;
-    });
+    round.play(|_| { 1 }); // player 2 tips
 
     println!("{}", round);
-    round.play(|p| {
-        println!("CB: {}", p.borrow());
-        return 0;
-    });
+    round.play(|_| { 0 }); // player 1 matches
 
     println!("{}", round);
-    round.play(|p| {
-        println!("CB: {}", p.borrow());
-        return 1;
-    });
+    round.play(|_| { 1 }); // player 2 matches
+
+    println!("{}", round);
+    round.play(|_| { 0 }); // evaluate round
+
     println!("{}", round);
 }
