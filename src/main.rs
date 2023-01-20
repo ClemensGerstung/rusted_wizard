@@ -1,143 +1,147 @@
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
+
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 
-#[derive(Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Player {
-    name:String,
-    points:i16
+    name: String,
+    points: i16,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Tips {
-    tips:HashMap<String, i8>
+    tips: HashMap<String, u8>,
 }
 
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum RoundState {
-    TIPPING,
-    RETIPPING,
-    PLAYING,
-    CHECKING,
-    END,
+    Tipping,
+    Retipping,
+    Playing,
+    Checking,
+    End,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Round {
-    round_nr:i8,
-    state:RoundState,
-    tips:Tips,
-    matches:Tips,
-    players:Vec<Rc<RefCell<Player>>>,
-    current_player_index:i8
+    round_nr: u32,
+    state: RoundState,
+    tips: Tips,
+    matches: Tips,
+    players: Vec<Player>,
+    current_player_index: usize,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum WizardState {
-    INIT,
-    PLAYING,
-    END
+    Init,
+    Playing,
+    End,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Wizard {
-    state:WizardState,
-    round_count:i8,
-    round_index:i8,
-    player_count:i8,
-    player_index:i8,
-    players:Vec<Player>,
-    rounds:Vec<Round>
+    state: WizardState,
+    round_count: usize,
+    round_index: usize,
+    player_count: usize,
+    player_index: usize,
+    players: Vec<Player>,
+    rounds: Vec<Round>,
 }
 
 impl Player {
-    fn new(name: String) -> Player {
-        Player { name, points: 0 }
-    }
-}
-
-impl PartialEq for Player {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+    fn new(name: String) -> Self {
+        Self { name, points: 0 }
     }
 }
 
 impl Display for Player {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.points)
+        write!(f, "{}: {}", self.name, self.points)?;
+
+        Ok(())
     }
 }
 
 impl Tips {
-    fn new() -> Tips {
-        Tips { tips: HashMap::new() }
+    fn new() -> Self {
+        Self { tips: HashMap::new() }
     }
 
-    fn add_tip(&mut self, player:&Player, tip:i8) {
+    fn add_tip(&mut self, player:&Player, tip: u8) {
         self.tips.insert(player.name.to_string(), tip);
     }
 
-    fn get_tip(&self, player:&Player) -> i8 {
-        match self.tips.get(&player.name) {
-            Some(tip) => *tip,
-            None => 0
-        }
+    fn get_tip(&self, player:&Player) -> u8 {
+        self.tips.get(&player.name)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn sum(&self) -> u32 {
+        self.tips.values().copied().map(u32::from).sum()
     }
 }
 
 impl Round {
-    fn new(round_nr:i8, players:Vec<Rc<RefCell<Player>>>) -> Round {
-        Round {round_nr, state:RoundState::TIPPING, tips:Tips::new(), matches:Tips::new(), players, current_player_index:0}
+    fn new(round_nr: u32, players: Vec<Player>) -> Self {
+        Self {
+            round_nr,
+            state: RoundState::Tipping,
+            tips: Tips::new(),
+            matches: Tips::new(),
+            players,
+            current_player_index: 0
+        }
     }
 
-    fn play(&mut self, input_callback: fn(&RefCell<Player>) -> i8) {
-        let current_player_index = self.current_player_index as usize;
-        if self.state == RoundState::TIPPING || self.state == RoundState::RETIPPING {
-            let current_player:&RefCell<Player> = &self.players[current_player_index];
-            self.tips.add_tip(&current_player.borrow(), input_callback(current_player));
+    fn play(&mut self, input_callback: fn(&Player) -> u8) {
+        if self.state == RoundState::Tipping || self.state == RoundState::Retipping {
+            let current_player = &self.players[self.current_player_index];
+            self.tips.add_tip(current_player, input_callback(current_player));
 
-            if self.current_player_index == (self.players.len() - 1) as i8 {
-                let sum_of_tips:i8 = self.tips.tips.values().sum(); // TODO: is there an easier way?
+            if self.current_player_index + 1 == self.players.len() {
+                let sum_of_tips = self.tips.sum();
                 self.state = if sum_of_tips == self.round_nr {
-                     RoundState::RETIPPING
+                     RoundState::Retipping
                 } else {
-                     RoundState::PLAYING
+                     RoundState::Playing
                 };
 
                 self.current_player_index = 0;
             } else {
                 self.current_player_index += 1;
             }
-        } else if self.state == RoundState::PLAYING {
-            let current_player:&RefCell<Player> = &self.players[current_player_index];
-            self.matches.add_tip(&current_player.borrow(), input_callback(current_player));
+        } else if self.state == RoundState::Playing {
+            let current_player = &self.players[self.current_player_index];
+            self.matches.add_tip(current_player, input_callback(current_player));
 
-            if self.current_player_index == (self.players.len() - 1) as i8 {
-                let sum_of_matches:i8 = self.matches.tips.values().sum(); // TODO: is there an easier way?
+            if self.current_player_index == self.players.len() - 1 {
+                let sum_of_matches = self.matches.sum();
                 if sum_of_matches == self.round_nr {
-                    self.state = RoundState::CHECKING;
+                    self.state = RoundState::Checking;
                 }
 
                 self.current_player_index = 0;
             } else {
                 self.current_player_index += 1;
             }
-        } else if self.state == RoundState::CHECKING {
+        } else if self.state == RoundState::Checking {
             for player in &mut self.players {
-                let p: &RefCell<Player> = player.borrow_mut();
-
-                let tip = self.tips.get_tip(&p.borrow());
-                let matched = self.matches.get_tip(&p.borrow());
-                let diff = (tip - matched).abs();
+                let tip = self.tips.get_tip(player);
+                let matched = self.matches.get_tip(player);
+                let diff = u8::abs_diff(tip, matched);
 
                 if diff == 0 {
-                    p.borrow_mut().points += (20 + tip * 10) as i16;
+                    player.points += 20 + i16::from(tip) * 10
                 } else {
-                    p.borrow_mut().points += (diff * -10) as i16;
+                    player.points -= i16::from(diff) * 10;
                 };
 
             }
 
-            self.state = RoundState::END;
+            self.state = RoundState::End;
         }
     }
 }
@@ -145,20 +149,22 @@ impl Round {
 impl Display for Round {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for player in &self.players {
-            let p:&RefCell<Player> = player;
-            write!(f, "{}\n", p.borrow()).expect("AHHHHHAHAHAHAHAHA");
+            writeln!(f, "{}", player)?;
         }
 
-        write!(f, "{:?}", self.state)
+        write!(f, "{:?}", self.state)?;
+
+        Ok(())
     }
 }
 
 fn main() {
-    let player1 = Rc::new(RefCell::new(Player::new("Player 1".to_string())));
-    let player2 = Rc::new(RefCell::new(Player::new("Player 2".to_string())));
+    let player1 = Player::new(String::from("Player 1"));
+    let player2 = Player::new(String::from("Player 2"));
+
     let players = vec![player1, player2];
 
-    let mut round = Round::new(1, players.to_vec());
+    let mut round = Round::new(1, players);
     println!("{}", round);
     round.play(|_| { 1 }); // player 1 tips
 
