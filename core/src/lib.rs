@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Player {
+pub struct Player {
   name: String,
   points: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Tips {
+pub struct Tips {
   tips: HashMap<String, u8>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum RoundState {
+pub enum RoundState {
   Tipping,
   Retipping,
   Playing,
@@ -22,7 +22,7 @@ enum RoundState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Round {
+pub struct Round {
   round_nr: u32,
   state: RoundState,
   tips: Tips,
@@ -32,7 +32,7 @@ struct Round {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum WizardState {
+pub enum WizardState {
   Init,
   NextRound,
   Playing,
@@ -41,7 +41,7 @@ enum WizardState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Wizard {
+pub struct Wizard {
   state: WizardState,
   round_count: usize,
   round_index: usize,
@@ -53,7 +53,7 @@ struct Wizard {
 }
 
 impl Player {
-  fn new(name: String) -> Self {
+  pub fn new(name: String) -> Self {
     Self { name, points: 0 }
   }
 }
@@ -67,27 +67,27 @@ impl Display for Player {
 }
 
 impl Tips {
-  fn new() -> Self {
+  pub fn new() -> Self {
     Self { tips: HashMap::new() }
   }
 
-  fn add_tip(&mut self, player: &Player, tip: u8) {
+  pub fn add_tip(&mut self, player: &Player, tip: u8) {
     self.tips.insert(player.name.to_string(), tip);
   }
 
-  fn get_tip(&self, player: &Player) -> u8 {
+  pub fn get_tip(&self, player: &Player) -> u8 {
     self.tips.get(&player.name)
       .copied()
       .unwrap_or(0)
   }
 
-  fn sum(&self) -> u32 {
+  pub fn sum(&self) -> u32 {
     self.tips.values().copied().map(u32::from).sum()
   }
 }
 
 impl Round {
-  fn new(round_nr: u32, players: Vec<Player>) -> Self {
+  pub fn new(round_nr: u32, players: Vec<Player>) -> Self {
     Self {
       round_nr,
       state: RoundState::Tipping,
@@ -98,7 +98,7 @@ impl Round {
     }
   }
 
-  fn play(&mut self, input_callback: fn(&Player, &RoundState) -> u8) {
+  pub fn play(&mut self, input_callback: fn(&Player, &RoundState) -> u8) {
     if self.state == RoundState::Tipping || self.state == RoundState::Retipping {
       let current_player = &self.players[self.current_player_index];
       self.tips.add_tip(current_player, input_callback(current_player, &self.state));
@@ -160,7 +160,7 @@ impl Display for Round {
 }
 
 impl Wizard {
-  fn new(player_count: usize) -> Self {
+  pub fn new(player_count: usize) -> Self {
     Self {
       state: WizardState::Init,
       round_count: 60 / player_count,
@@ -173,7 +173,7 @@ impl Wizard {
     }
   }
 
-  fn play(&mut self, player_callback: fn(usize) -> String, input_callback: fn(&Player, &RoundState) -> u8) {
+  pub fn play(&mut self, player_callback: fn(usize) -> String, input_callback: fn(&Player, &RoundState) -> u8) {
     if self.state == WizardState::Init {
       let player = Player::new(player_callback(self.player_index));
       self.players.insert(self.player_index, player);
