@@ -222,45 +222,149 @@ impl Display for Wizard {
   }
 }
 
-fn input_player_names(index: usize) -> String {
-  println!("Player {}", index);
-  let player_names = vec!["qwer", "asdf", "zxcv"];
+#[cfg(test)]
+mod test {
+  use super::*;
+  use assertor::*;
 
-  return String::from(player_names[index]);
-}
+  fn player_input(index: usize) -> String {
+    let names = vec!["Player 1", "Player 2", "Player 3"];
 
-fn input_player_input(player: &Player, state: &RoundState) -> u8 {
-  let ts = if *state == RoundState::Tipping {
-    "Tipping"
-  } else if *state == RoundState::Retipping {
-    "Retipping"
-  } else if *state == RoundState::Playing {
-    "Matching"
-  } else {
-    ""
-  };
+    return String::from(names[index]);
+  }
 
-  println!("> {} of {}: ", ts, player.name);
+  fn empty_round_input(_player: &Player, _state: &RoundState) -> u8 {
+    return 0;
+  }
 
-  let mut user_input = String::new();
-  let stdin = std::io::stdin();
-  let _ = stdin.read_line(&mut user_input);
+  #[test]
+  fn initialization_no_state_change_state_is_init() {
+    // arrange
+    // act
+    let wizard = Wizard::new(3);
 
-  let parse_result = user_input.trim().parse::<u8>();
-  return match parse_result {
-    Ok(i) => i,
-    Err(..) => 0
-  };
-}
+    // assert
+    assert_that!(wizard.state).is_equal_to(WizardState::Init);
+  }
 
-fn main() {
-  let mut game = Wizard::new(3);
+  #[test]
+  fn initialization_input_names_state_is_next_round() {
+    // arrange
+    let mut wizard = Wizard::new(3);
 
-  while game.state != WizardState::End {
-    game.play(input_player_names, input_player_input);
+    // act
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
 
-    if game.state == WizardState::NextRound {
-      println!("{}", game);
-    }
+    // assert
+    assert_that!(wizard.state).is_equal_to(WizardState::NextRound);
+    assert_that!(wizard.players[0].name).is_equal_to(String::from("Player 1"));
+    assert_that!(wizard.players[1].name).is_equal_to(String::from("Player 2"));
+    assert_that!(wizard.players[2].name).is_equal_to(String::from("Player 3"));
+  }
+
+  #[test]
+  fn initialization_input_names_state_is_playing() {
+    // arrange
+    let mut wizard = Wizard::new(3);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+
+    // act
+    wizard.play(player_input, empty_round_input);
+
+    // assert
+    assert_that!(wizard.current_round).is_some();
+    let round = wizard.current_round.unwrap();
+    assert_that!(round.state).is_equal_to(RoundState::Tipping);
+
+    assert_that!(wizard.state).is_equal_to(WizardState::Playing);
+  }
+
+  #[test]
+  fn tip_first_round() {
+    // arrange
+    let mut wizard = Wizard::new(3);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+
+    // act
+    wizard.play(player_input, |_, _| {return 1;});
+    wizard.play(player_input, |_, _| {return 0;});
+    wizard.play(player_input, |_, _| {return 1;});
+
+    // assert
+    assert_that!(wizard.current_round).is_some();
+    let round = wizard.current_round.unwrap();
+    assert_that!(round.state).is_equal_to(RoundState::Playing);
+
+    assert_that!(wizard.state).is_equal_to(WizardState::Playing);
+  }
+
+  #[test]
+  fn play_first_round() {
+    // arrange
+    let mut wizard = Wizard::new(3);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+
+    wizard.play(player_input, |_, _| {return 1;});
+    wizard.play(player_input, |_, _| {return 0;});
+    wizard.play(player_input, |_, _| {return 1;});
+
+    // act
+    wizard.play(player_input, |_, _| {return 1;});
+    wizard.play(player_input, |_, _| {return 0;});
+    wizard.play(player_input, |_, _| {return 0;});
+
+    // assert
+    assert_that!(wizard.current_round).is_some();
+    let round = wizard.current_round.unwrap();
+    assert_that!(round.state).is_equal_to(RoundState::Checking);
+
+    assert_that!(wizard.state).is_equal_to(WizardState::Playing);
+  }
+
+  #[test]
+  fn check_first_round() {
+    // arrange
+    let mut wizard = Wizard::new(3);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+    wizard.play(player_input, empty_round_input);
+
+    wizard.play(player_input, |_, _| {return 1;});
+    wizard.play(player_input, |_, _| {return 0;});
+    wizard.play(player_input, |_, _| {return 1;});
+
+    wizard.play(player_input, |_, _| {return 1;});
+    wizard.play(player_input, |_, _| {return 0;});
+    wizard.play(player_input, |_, _| {return 0;});
+
+    // act
+    wizard.play(player_input, empty_round_input); // check round
+    wizard.play(player_input, empty_round_input); // end round
+    wizard.play(player_input, empty_round_input); // next round
+
+    // assert
+    assert_that!(wizard.current_round).is_some();
+    let round = wizard.current_round.unwrap();
+    assert_that!(round.state).is_equal_to(RoundState::End);
+
+    assert_that!(wizard.state).is_equal_to(WizardState::NextRound);
+
+    let mut players = wizard.players.to_vec();
+    players.rotate_right(1); // we need to rotate back one because end round already rotates players
+    assert_that!(players[0].points).is_equal_to(30);
+    assert_that!(players[1].points).is_equal_to(20);
+    assert_that!(players[2].points).is_equal_to(-10);
+
   }
 }

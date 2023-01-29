@@ -8,3 +8,6 @@ edition = "2018"
 [dependencies]
 tui = "0.19"
 crossterm = "0.25"
+
+[dev-dependencies]
+assertor = "0.0.1"
