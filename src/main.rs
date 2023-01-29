@@ -197,9 +197,7 @@ impl Wizard {
         self.state = WizardState::End;
       }
     } else if self.state == WizardState::NextRound {
-      self.players.rotate_left(1);
       self.round_index += 1;
-
       self.current_round = Option::from(Round::new(self.round_index as u32, self.players.to_vec()));
 
       self.state = WizardState::Playing;
@@ -207,6 +205,7 @@ impl Wizard {
       let current_round = self.current_round.as_mut().unwrap();
       self.rounds.insert(self.round_index - 1, current_round.to_owned());
       self.players = current_round.players.to_vec();
+      self.players.rotate_left(1);
 
       self.state = WizardState::NextRound;
     }
