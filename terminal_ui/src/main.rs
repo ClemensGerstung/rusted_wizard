@@ -1,78 +1,37 @@
-use rusted_wizard_core::*;
-
+use rusted_wizard_core;
+use std::{error::Error, io};
+use tui::{
+    backend::{Backend, CrosstermBackend},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Span},
+    widgets::{Block, Borders, Clear, Paragraph},
+    Frame, Terminal,
+};
+use unicode_width::UnicodeWidthStr;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io};
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Layout},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, TableState},
-    Frame, Terminal,
-};
+use rusted_wizard_core::Wizard;
 
-struct App<'a> {
-    state: TableState,
-    items: Vec<Vec<&'a str>>,
+struct App {
+    game: Option<rusted_wizard_core::Wizard>,
+    show_popup: bool,
+    player_count: String,
+    hint: String,
 }
 
-impl<'a> App<'a> {
-    fn new() -> App<'a> {
+impl App {
+    fn new() -> App {
         App {
-            state: TableState::default(),
-            items: vec![
-                vec!["Row11", "Row12", "Row13"],
-                vec!["Row21", "Row22", "Row23"],
-                vec!["Row31", "Row32", "Row33"],
-                vec!["Row41", "Row42", "Row43"],
-                vec!["Row51", "Row52", "Row53"],
-                vec!["Row61", "Row62\nTest", "Row63"],
-                vec!["Row71", "Row72", "Row73"],
-                vec!["Row81", "Row82", "Row83"],
-                vec!["Row91", "Row92", "Row93"],
-                vec!["Row101", "Row102", "Row103"],
-                vec!["Row111", "Row112", "Row113"],
-                vec!["Row121", "Row122", "Row123"],
-                vec!["Row131", "Row132", "Row133"],
-                vec!["Row141", "Row142", "Row143"],
-                vec!["Row151", "Row152", "Row153"],
-                vec!["Row161", "Row162", "Row163"],
-                vec!["Row171", "Row172", "Row173"],
-                vec!["Row181", "Row182", "Row183"],
-                vec!["Row191", "Row192", "Row193"],
-            ],
+            game: Option::None,
+            show_popup: false,
+            player_count: String::new(),
+            hint: String::new(),
         }
-    }
-    pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
     }
 }
 
@@ -106,53 +65,127 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     loop {
-        terminal.draw(|f| ui(f, &mut app))?;
+        terminal.draw(|f| ui(f, &app))?;
 
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
-                _ => {}
+        match &app.game {
+            Some(wizard) => {
+
+
+            },
+            None => {
+                app.show_popup = true;
+
+                if app.player_count.is_empty() {
+                    app.hint = String::from("Number of players required");
+                } else {
+                    app.hint = String::new();
+                }
+
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Enter => {
+                            let player_count = app.player_count.parse::<usize>().unwrap();
+
+                            app.game = Option::from(Wizard::new(player_count));
+                            app.show_popup = false;
+                        }
+                        KeyCode::Char(c) => {
+                            let mut temp = String::from(&app.player_count);
+                            temp.push(c);
+
+                            match temp.parse::<usize>() {
+                                Ok(val) => {
+                                    if val >= 3 && val <= 6 {
+                                        app.player_count.push(c);
+                                        app.hint = String::new();
+                                    } else {
+                                        app.hint = String::from("Player count must be between (including) 3 and 6");
+                                    }
+                                },
+                                Err(_) => {
+                                    app.hint = String::from("Not a Number");
+                                }
+                            }
+                        },
+                        KeyCode::Backspace => {
+                            app.player_count.pop();
+                        },
+                        KeyCode::Esc => {
+                            return Ok(());
+                        },
+                        _ => {}
+                    }
+                }
             }
         }
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
-    let rects = Layout::default()
-      .constraints([Constraint::Percentage(100)].as_ref())
-      .margin(5)
-      .split(f.size());
+fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+    let size = f.size();
 
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default().bg(Color::Blue);
-    let header_cells = ["Header1", "Header2", "Header3"]
-      .iter()
-      .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
-    let header = Row::new(header_cells)
-      .style(normal_style)
-      .height(1)
-      .bottom_margin(1);
-    let rows = app.items.iter().map(|item| {
-        let height = item
-          .iter()
-          .map(|content| content.chars().filter(|c| *c == '\n').count())
-          .max()
-          .unwrap_or(0)
-          + 1;
-        let cells = item.iter().map(|c| Cell::from(*c));
-        Row::new(cells).height(height as u16).bottom_margin(1)
-    });
-    let t = Table::new(rows)
-      .header(header)
-      .block(Block::default().borders(Borders::ALL).title("Table"))
-      .highlight_style(selected_style)
-      .highlight_symbol(">> ")
-      .widths(&[
-          Constraint::Percentage(50),
-          Constraint::Length(30),
-          Constraint::Min(10),
-      ]);
-    f.render_stateful_widget(t, rects[0], &mut app.state);
+    let block = Block::default()
+        .title("Content")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Blue));
+    f.render_widget(block, size);
+
+    if app.show_popup {
+        render_player_count_popup(f, &app.player_count, &app.hint);
+    }
+}
+
+fn render_player_count_popup<'a, B: Backend>(f: &mut Frame<B>, player_count: &'a String, hint: &'a String) {
+    let size = f.size();
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Percentage(50),
+            ].as_ref(),
+        )
+        .split(size);
+
+    let horizontal_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage(20),
+                Constraint::Percentage(60),
+                Constraint::Percentage(20),
+            ]
+                .as_ref(),
+        );
+    let text_area = horizontal_layout.split(popup_layout[1])[1];
+    let hint_area = horizontal_layout.split(popup_layout[2])[1];
+
+    f.render_widget(Clear, text_area); //this clears out the background
+    f.render_widget(Clear, hint_area); //this clears out the background
+
+    let input = Paragraph::new(player_count.clone())
+        .style(Style::default().fg(Color::White))
+        .block(Block::default().borders(Borders::ALL).title("How many Players?"));
+    f.render_widget(input, text_area);
+    f.set_cursor(
+        text_area.x + player_count.width() as u16 + 1,
+        text_area.y + 1,
+    );
+
+    if !hint.is_empty() {
+        let text = vec![
+            Span::from(Span::styled(
+                "Hint: ",
+                Style::default()
+                    .fg(Color::Red)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Span::from(hint.clone()),
+        ];
+
+        let hint = Block::default().title(text);
+        f.render_widget(hint, hint_area);
+    }
 }
