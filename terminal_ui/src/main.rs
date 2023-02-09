@@ -1,3 +1,7 @@
+mod ui_app;
+mod player_count_input_popup;
+mod player_name_input_popup;
+
 use rusted_wizard_core;
 use std::{error::Error, io};
 use tui::{
@@ -15,25 +19,8 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rusted_wizard_core::Wizard;
-
-struct App {
-    game: Option<rusted_wizard_core::Wizard>,
-    show_popup: bool,
-    player_count: String,
-    hint: String,
-}
-
-impl App {
-    fn new() -> App {
-        App {
-            game: Option::None,
-            show_popup: false,
-            player_count: String::new(),
-            hint: String::new(),
-        }
-    }
-}
+use crossterm::event::KeyModifiers;
+use rusted_wizard_core::{Wizard, WizardState};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
@@ -44,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::new();
+    let app = ui_app::App::new();
     let res = run_app(&mut terminal, app);
 
     // restore terminal
@@ -63,18 +50,56 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: ui_app::App) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, &app))?;
 
-        match &app.game {
+        match app.game.as_mut() {
             Some(wizard) => {
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Esc => {
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
 
+                    if wizard.state == WizardState::Init {
+                        match key.code {
+                            KeyCode::Tab => {
+                                let index = if key.modifiers.contains(KeyModifiers::SHIFT) {
+                                    (app.player_name_index - 1) % wizard.player_count
+                                } else {
+                                    (app.player_name_index + 1) % wizard.player_count
+                                };
+                                app.player_name_index = index;
+                            }
+                            KeyCode::Char(c) => {
+                                app.player_names[app.player_name_index].push(c);
+                            }
+                            KeyCode::Backspace => {
+                                app.player_names[app.player_name_index].pop();
+                            }
+                            KeyCode::Enter => {
+                                let is_ok = app.player_names.iter().all(|pn| !pn.is_empty());
+                                if is_ok {
+                                    for _ in 0..wizard.player_count {
+                                        wizard.play(|player_index| {
+                                            app.player_names[player_index].clone()
+                                        },
+                                                    |_, _| { 0 });
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    else {
 
-            },
+                    }
+                }
+            }
             None => {
-                app.show_popup = true;
-
                 if app.player_count.is_empty() {
                     app.hint = String::from("Number of players required");
                 } else {
@@ -84,10 +109,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 if let Event::Key(key) = event::read()? {
                     match key.code {
                         KeyCode::Enter => {
-                            let player_count = app.player_count.parse::<usize>().unwrap();
-
-                            app.game = Option::from(Wizard::new(player_count));
-                            app.show_popup = false;
+                            match app.player_count.parse::<usize>() {
+                                Ok(player_count) => {
+                                    app.game = Option::from(Wizard::new(player_count));
+                                    for _ in 0..player_count {
+                                        app.player_names.push(String::new());
+                                    }
+                                }
+                                Err(_) => {
+                                    app.hint = String::from("No valid input!")
+                                }
+                            }
                         }
                         KeyCode::Char(c) => {
                             let mut temp = String::from(&app.player_count);
@@ -101,18 +133,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                                     } else {
                                         app.hint = String::from("Player count must be between (including) 3 and 6");
                                     }
-                                },
+                                }
                                 Err(_) => {
                                     app.hint = String::from("Not a Number");
                                 }
                             }
-                        },
+                        }
                         KeyCode::Backspace => {
                             app.player_count.pop();
-                        },
+                        }
                         KeyCode::Esc => {
                             return Ok(());
-                        },
+                        }
                         _ => {}
                     }
                 }
@@ -121,7 +153,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+fn ui<B: Backend>(f: &mut Frame<B>, app: &ui_app::App) {
     let size = f.size();
 
     let block = Block::default()
@@ -130,62 +162,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .style(Style::default().bg(Color::Blue));
     f.render_widget(block, size);
 
-    if app.show_popup {
-        render_player_count_popup(f, &app.player_count, &app.hint);
-    }
-}
-
-fn render_player_count_popup<'a, B: Backend>(f: &mut Frame<B>, player_count: &'a String, hint: &'a String) {
-    let size = f.size();
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Percentage(50),
-                Constraint::Length(3),
-                Constraint::Length(1),
-                Constraint::Percentage(50),
-            ].as_ref(),
-        )
-        .split(size);
-
-    let horizontal_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Percentage(20),
-                Constraint::Percentage(60),
-                Constraint::Percentage(20),
-            ]
-                .as_ref(),
-        );
-    let text_area = horizontal_layout.split(popup_layout[1])[1];
-    let hint_area = horizontal_layout.split(popup_layout[2])[1];
-
-    f.render_widget(Clear, text_area); //this clears out the background
-    f.render_widget(Clear, hint_area); //this clears out the background
-
-    let input = Paragraph::new(player_count.clone())
-        .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL).title("How many Players?"));
-    f.render_widget(input, text_area);
-    f.set_cursor(
-        text_area.x + player_count.width() as u16 + 1,
-        text_area.y + 1,
-    );
-
-    if !hint.is_empty() {
-        let text = vec![
-            Span::from(Span::styled(
-                "Hint: ",
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::BOLD),
-            )),
-            Span::from(hint.clone()),
-        ];
-
-        let hint = Block::default().title(text);
-        f.render_widget(hint, hint_area);
-    }
+    player_count_input_popup::draw(f, app);
+    player_name_input_popup::draw(f, app);
 }

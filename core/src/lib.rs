@@ -42,10 +42,10 @@ pub enum WizardState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Wizard {
-  state: WizardState,
+  pub state: WizardState,
   round_count: usize,
   round_index: usize,
-  player_count: usize,
+  pub player_count: usize,
   player_index: usize,
   players: Vec<Player>,
   rounds: Vec<Round>,
@@ -98,7 +98,7 @@ impl Round {
     }
   }
 
-  pub fn play(&mut self, input_callback: fn(&Player, &RoundState) -> u8) {
+  pub fn play(&mut self, input_callback: impl Fn(&Player, &RoundState) -> u8) {
     if self.state == RoundState::Tipping || self.state == RoundState::Retipping {
       let current_player = &self.players[self.current_player_index];
       self.tips.add_tip(current_player, input_callback(current_player, &self.state));
@@ -173,7 +173,7 @@ impl Wizard {
     }
   }
 
-  pub fn play(&mut self, player_callback: fn(usize) -> String, input_callback: fn(&Player, &RoundState) -> u8) {
+  pub fn play(&mut self, player_callback: impl Fn(usize) -> String, input_callback: impl Fn(&Player, &RoundState) -> u8) {
     if self.state == WizardState::Init {
       let player = Player::new(player_callback(self.player_index));
       self.players.insert(self.player_index, player);
