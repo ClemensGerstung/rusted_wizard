@@ -42,6 +42,8 @@ pub fn handle_input(app: &mut ui_app::App, key: KeyEvent) {
                             |_, _| 0,
                         );
                     }
+                } else {
+                    app.player_name_index = (app.player_name_index + 1) % wizard.player_count;
                 }
             }
             _ => {}

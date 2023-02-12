@@ -1,6 +1,7 @@
 mod player_count_input_popup;
 mod player_name_input_popup;
 mod ui_app;
+mod playground;
 
 use rusted_wizard_core;
 use std::{error::Error, io};
@@ -59,21 +60,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut ui_app::App) -> io:
                 return Ok(());
             }
 
-            player_count_input_popup::handle_input(app, key);
             player_name_input_popup::handle_input(app, key);
+            player_count_input_popup::handle_input(app, key);
         }
     }
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &ui_app::App) {
-    let size = f.size();
-
     let block = Block::default()
-        .title("Content")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Blue));
-    f.render_widget(block, size);
+        .style(Style::default().bg(Color::Rgb(50, 50, 50)));
+    f.render_widget(block, f.size());
 
     player_count_input_popup::draw(f, app);
     player_name_input_popup::draw(f, app);
+    playground::draw(f, app);
 }

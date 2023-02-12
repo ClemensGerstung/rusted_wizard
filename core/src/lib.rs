@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Player {
     name: String,
-    points: i16,
+    pub points: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,10 +24,10 @@ pub enum RoundState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Round {
     round_nr: u32,
-    state: RoundState,
-    tips: Tips,
-    matches: Tips,
-    players: Vec<Player>,
+    pub state: RoundState,
+    pub tips: Tips,
+    pub matches: Tips,
+    pub players: Vec<Player>,
     current_player_index: usize,
 }
 
@@ -43,13 +43,13 @@ pub enum WizardState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Wizard {
     pub state: WizardState,
-    round_count: usize,
-    round_index: usize,
+    pub round_count: usize,
+    pub round_index: usize,
     pub player_count: usize,
     player_index: usize,
-    players: Vec<Player>,
-    rounds: Vec<Round>,
-    current_round: Option<Round>,
+    pub players: Vec<Player>,
+    pub rounds: Vec<Round>,
+    pub current_round: Option<Round>,
 }
 
 impl Player {
